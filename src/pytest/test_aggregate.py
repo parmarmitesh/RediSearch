@@ -5,6 +5,7 @@ import os
 from RLTest import Env
 import pprint
 from includes import *
+from time import sleep
 
 def to_dict(res):
     d = {res[i]: res[i + 1] for i in range(0, len(res), 2)}
@@ -16,9 +17,9 @@ GAMES_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'games.jso
 
 def add_values(env, number_of_iterations=1):
     env.execute_command('FT.CREATE', 'games', 'ON', 'HASH',
-                        'SCHEMA', 'title', 'TEXT', 'SORTABLE',
-                        'brand', 'TEXT', 'NOSTEM', 'SORTABLE',
-                        'description', 'TEXT', 'price', 'NUMERIC', 'SORTABLE',
+                        'SCHEMA', 'title', 'TEXT',
+                        'brand', 'TEXT', 'NOSTEM',
+                        'description', 'TEXT', 'price', 'NUMERIC',
                         'categories', 'TAG')
 
     for i in range(number_of_iterations):
@@ -33,8 +34,10 @@ def add_values(env, number_of_iterations=1):
                 [str(x) if x is not None else '' for x in itertools.chain(
                     *obj.items())]
             env.execute_command(*cmd)
+            env.execute_command('PEXPIRE', id, 100)
         fp.close()
-
+        sleep(0.1)
+        env.expect('FT.SEARCH games * nocontent').noEqual([0L])
 
 class TestAggregate():
     def __init__(self):
@@ -51,9 +54,7 @@ class TestAggregate():
 
         res = self.env.cmd(*cmd)
         self.env.assertIsNotNone(res)
-        self.env.assertEqual([292L, ['brand', '', 'count', '1518'], ['brand', 'mad catz', 'count', '43'],
-                                    ['brand', 'generic', 'count', '40'], ['brand', 'steelseries', 'count', '37'],
-                                    ['brand', 'logitech', 'count', '35']], res)
+        self.env.assertEqual([0L], res)
 
     def testMinMax(self):
         cmd = ['ft.aggregate', 'games', 'sony',
@@ -83,11 +84,11 @@ class TestAggregate():
                'SORTBY', '2', '@avg_price', 'DESC']
         res = self.env.cmd(*cmd)
         self.env.assertIsNotNone(res)
-        self.env.assertEqual(26, res[0])
+        self.env.assertEqual([1L, ['brand', None, 'avg_price', '0', '__generated_aliascount', '6']], res)
         # Ensure the formatting actually exists
 
         first_row = to_dict(res[1])
-        self.env.assertEqual(109, int(float(first_row['avg_price'])))
+        self.env.assertEqual(0, int(float(first_row['avg_price'])))
 
         for row in res[1:]:
             row = to_dict(row)
@@ -109,7 +110,7 @@ class TestAggregate():
         res = self.env.cmd(*cmd)[1:]
         # print res
         row = to_dict(res[0])
-        self.env.assertEqual(1484, int(row['count_distinct(title)']))
+        self.env.assertEqual(0, int(row['count_distinct(title)']))
 
         cmd = ['FT.AGGREGATE', 'games', '*',
                'GROUPBY', '1', '@brand',
@@ -132,6 +133,7 @@ class TestAggregate():
                'SORTBY', '2', '@rowcount', 'DESC', 'MAX', '1']
 
         res = self.env.cmd(*cmd)
+        
         row = to_dict(res[1])
         # TODO: Better samples
         self.env.assertAlmostEqual(14.99, float(row['q50']), delta=3)
@@ -164,8 +166,7 @@ class TestAggregate():
                'LIMIT', '0', '1']
         res = self.env.cmd(*cmd)
 
-        self.env.assertEqual(['brand', '', 'count', '1518', 'dt',
-                              '2018-01-31T16:45:44Z', 'parsed_dt', '1517417144'], res[1])
+        self.env.assertEqual([0L], res)
 
     def testRandomSample(self):
         cmd = ['FT.AGGREGATE', 'games', '*', 'GROUPBY', '1', '@brand',
@@ -195,8 +196,7 @@ class TestAggregate():
 
                'LIMIT', '0', '1']
         res = self.env.cmd(*cmd)
-        self.env.assertListEqual([1L, ['dt', '1517417144', 'timefmt', '2018-01-31T16:45:44Z', 'day', '1517356800', 'hour', '1517414400',
-                                       'minute', '1517417100', 'month', '1514764800', 'dayofweek', '3', 'dayofmonth', '31', 'dayofyear', '30', 'year', '2018']], res)
+        self.env.assertListEqual([0L], res)
 
     def testStringFormat(self):
         cmd = ['FT.AGGREGATE', 'games', '@brand:sony',
@@ -221,14 +221,7 @@ class TestAggregate():
                'LIMIT', '0', '5'
                ]
         res = self.env.cmd(*cmd)
-        self.env.assertEqual([292L, ['brand', '', 'count', '1518', 'sum(price)', '44780.69'],
-                             ['brand', 'mad catz', 'count',
-                                 '43', 'sum(price)', '3973.48'],
-                             ['brand', 'razer', 'count', '26',
-                                 'sum(price)', '2558.58'],
-                             ['brand', 'logitech', 'count',
-                                 '35', 'sum(price)', '2329.21'],
-                             ['brand', 'steelseries', 'count', '37', 'sum(price)', '1851.12']], res)
+        self.env.assertEqual([0L], res)
 
     def testFilter(self):
         cmd = ['ft.aggregate', 'games', '*',
@@ -275,24 +268,21 @@ class TestAggregate():
                            'SORTBY', 2, '@price', 'desc',
                            'LIMIT', '0', '2')
 
-        self.env.assertListEqual([292L, ['brand', '', 'price', '44780.69'], [
-                                 'brand', 'mad catz', 'price', '3973.48']], res)
+        self.env.assertListEqual([0L], res)
 
         res = self.env.cmd('ft.aggregate', 'games', '*', 'GROUPBY', '1', '@brand',
                            'REDUCE', 'sum', 1, '@price', 'as', 'price',
                            'SORTBY', 2, '@price', 'asc',
                            'LIMIT', '0', '2')
 
-        self.env.assertListEqual([292L, ['brand', 'myiico', 'price', '0.23'], [
-                                 'brand', 'crystal dynamics', 'price', '0.25']], res)
+        self.env.assertListEqual([0L], res)
 
         # Test MAX with limit higher than it
         res = self.env.cmd('ft.aggregate', 'games', '*', 'GROUPBY', '1', '@brand',
                            'REDUCE', 'sum', 1, '@price', 'as', 'price',
                            'SORTBY', 2, '@price', 'asc', 'MAX', 2)
 
-        self.env.assertListEqual([292L, ['brand', 'myiico', 'price', '0.23'], [
-                                 'brand', 'crystal dynamics', 'price', '0.25']], res)
+        self.env.assertListEqual([0L], res)
 
         # Test Sorting by multiple properties
         res = self.env.cmd('ft.aggregate', 'games', '*', 'GROUPBY', '1', '@brand',
@@ -300,8 +290,7 @@ class TestAggregate():
                            'APPLY', '(@price % 10)', 'AS', 'price',
                            'SORTBY', 4, '@price', 'asc', '@brand', 'desc', 'MAX', 10,
                            )
-        self.env.assertListEqual([292L, ['brand', 'zps', 'price', '0'], ['brand', 'zalman', 'price', '0'], ['brand', 'yoozoo', 'price', '0'], ['brand', 'white label', 'price', '0'], ['brand', 'stinky', 'price', '0'], [
-                                 'brand', 'polaroid', 'price', '0'], ['brand', 'plantronics', 'price', '0'], ['brand', 'ozone', 'price', '0'], ['brand', 'oooo', 'price', '0'], ['brand', 'neon', 'price', '0']], res)
+        self.env.assertListEqual([0L], res)
 
     def testExpressions(self):
         pass
@@ -319,14 +308,14 @@ class TestAggregate():
  ['brand', 'speedlink', 'price', '9']]
         # exp = [2265L, ['brand', 'Xbox', 'price', '9'], ['brand', 'Turtle Beach', 'price', '9'], [
                             #  'brand', 'Trust', 'price', '9'], ['brand', 'SteelSeries', 'price', '9'], ['brand', 'Speedlink', 'price', '9']]
-        self.env.assertListEqual(exp[1], res[1])
+        self.env.assertListEqual([0L], res)
 
     def testLoad(self):
         res = self.env.cmd('ft.aggregate', 'games', '*',
                            'LOAD', '3', '@brand', '@price', '@nonexist',
-                           'SORTBY', 2, '@price', 'DESC', 'MAX', 2)
-        exp = [3L, ['brand', '', 'price', '759.12'], ['brand', 'Sony', 'price', '695.8']]
-        self.env.assertEqual(exp[1], res[1])
+                           'SORTBY', 2, '@price', 'DESC',
+                           'FILTER', '@price < 700')
+        self.env.assertEqual([0L], res)
 
     def testSplit(self):
         res = self.env.cmd('ft.aggregate', 'games', '*', 'APPLY', 'split("hello world,  foo,,,bar,", ",", " ")', 'AS', 'strs',
@@ -340,12 +329,7 @@ class TestAggregate():
         # print "Got {} results".format(len(res))
         # return
         # pprint.pprint(res)
-        self.env.assertListEqual([1L, ['strs', ['hello world', 'foo', 'bar'],
-                                       'strs2', ['hello', 'world', 'foo,,,bar'],
-                                       'strs3', ['hello world,  foo,,,bar,'],
-                                       'strs4', ['hello world', 'foo', 'bar'],
-                                       'strs5', ['hello world', 'foo', 'bar'],
-                                       'empty', []]], res)
+        self.env.assertListEqual([0L], res)
 
     def testFirstValue(self):
         res = self.env.cmd('ft.aggregate', 'games', '@brand:(sony|matias|beyerdynamic|(mad catz))',
@@ -356,12 +340,7 @@ class TestAggregate():
                            'REDUCE', 'FIRST_VALUE', 4, '@price', 'BY', '@price', 'ASC', 'AS', 'bottom_price',
                            'SORTBY', 2, '@top_price', 'DESC', 'MAX', 5
                            )
-        expected = [4L, ['brand', 'sony', 'top_item', 'sony psp slim &amp; lite 2000 console', 'top_price', '695.8', 'bottom_item', 'sony dlchd20p high speed hdmi cable for playstation 3', 'bottom_price', '5.88'],
-                                 ['brand', 'matias', 'top_item', 'matias halfkeyboard usb', 'top_price',
-                                     '559.99', 'bottom_item', 'matias halfkeyboard usb', 'bottom_price', '559.99'],
-                                 ['brand', 'beyerdynamic', 'top_item', 'beyerdynamic mmx300 pc gaming premium digital headset with microphone', 'top_price', '359.74',
-                                     'bottom_item', 'beyerdynamic headzone pc gaming digital surround sound system with mmx300 digital headset with microphone', 'bottom_price', '0'],
-                                 ['brand', 'mad catz', 'top_item', 'mad catz s.t.r.i.k.e.7 gaming keyboard', 'top_price', '295.95', 'bottom_item', 'madcatz mov4545 xbox replacement breakaway cable', 'bottom_price', '3.49']]
+        expected = [0L]
         
         # hack :(
         def mklower(result):
@@ -383,7 +362,7 @@ class TestAggregate():
                           'GROUPBY', 1, '@brand',
                           'REDUCE', 'MIN', 1, '@price',
                           'LIMIT', 0, 1)
-        self.env.assertEqual([292L, ['brand', '', '__generated_aliasminprice', '0']], rv)
+        self.env.assertEqual([0L], rv)
 
         rv = self.env.cmd('ft.aggregate', 'games', '@brand:(sony|matias|beyerdynamic|(mad catz))',
                           'GROUPBY', 1, '@brand',
@@ -393,8 +372,8 @@ class TestAggregate():
 
     def testIssue1125(self):
         rv = self.env.cmd('ft.aggregate', 'games', '*',
-                          'LIMIT', 0, 20000000)
-        self.env.assertEqual(2266, len(rv))
+                          'LIMIT', 0, 200000)
+        self.env.assertEqual(1, len(rv))
 
         # SEARCH should fail
         self.env.expect('ft.search', 'games', '*', 'limit', 0, 2000000).error()     \
@@ -433,11 +412,11 @@ class TestAggregateSecondUseCases():
     def testSimpleAggregate(self):
         res = self.env.cmd('ft.aggregate', 'games', '*')
         self.env.assertIsNotNone(res)
-        self.env.assertEqual(len(res), 4531)
+        self.env.assertNotEqual(len(res), 0)
 
     def testSimpleAggregateWithCursor(self):
         res = self.env.cmd('ft.aggregate', 'games', '*', 'WITHCURSOR', 'COUNT', 1000)
-        self.env.assertTrue(res[1] != 0)
+        self.env.assertNotEqual(res, 0)
 
 def grouper(iterable, n, fillvalue=None):
     "Collect data into fixed-length chunks or blocks"
@@ -461,8 +440,8 @@ def testAggregateGroupByOnEmptyField(env):
 
 def testGroupbyNoReduce(env):
     env.cmd('ft.create', 'idx', 'ON', 'HASH',
-            'SCHEMA', 'primaryName', 'TEXT', 'SORTABLE',
-            'birthYear', 'NUMERIC', 'SORTABLE')
+            'SCHEMA', 'primaryName', 'TEXT',
+            'birthYear', 'NUMERIC')
     
     for x in range(10):
         env.cmd('ft.add', 'idx', 'doc{}'.format(x), 1, 'fields',
