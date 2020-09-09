@@ -28,7 +28,8 @@ typedef struct {
 
 typedef struct InvertedIndex {
   IndexBlock *blocks;
-  uint32_t size;
+  uint32_t blkNum;
+  uint32_t sizeByte;
   IndexFlags flags;
   t_docId lastId;
   uint32_t numDocs;

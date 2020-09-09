@@ -138,7 +138,7 @@ TEST_F(FGCTest, testRepairLastBlockWhileRemovingMiddle) {
   // Delete the first block:
   unsigned curId = 0;
   auto iv = getTagInvidx(ctx, sp, "f1", "hello");
-  while (iv->size < 3) {
+  while (iv->blkNum < 3) {
     char buf[1024];
     size_t n = sprintf(buf, "doc%u", curId++);
     ASSERT_TRUE(RS::addDocument(ctx, sp, buf, "f1", "hello"));
@@ -171,7 +171,7 @@ TEST_F(FGCTest, testRepairLastBlockWhileRemovingMiddle) {
   FGC_WaitClear(fgc);
 
   ASSERT_EQ(1, fgc->stats.gcBlocksDenied);
-  ASSERT_EQ(2, iv->size);
+  ASSERT_EQ(2, iv->blkNum);
 }
 
 /**
@@ -181,7 +181,7 @@ TEST_F(FGCTest, testRepairLastBlock) {
   // Delete the first block:
   unsigned curId = 0;
   auto iv = getTagInvidx(ctx, sp, "f1", "hello");
-  while (iv->size < 2) {
+  while (iv->blkNum < 2) {
     char buf[1024];
     size_t n = sprintf(buf, "doc%u", curId++);
     ASSERT_TRUE(RS::addDocument(ctx, sp, buf, "f1", "hello"));
@@ -207,7 +207,7 @@ TEST_F(FGCTest, testRepairLastBlock) {
   FGC_WaitClear(fgc);
 
   ASSERT_EQ(1, fgc->stats.gcBlocksDenied);
-  ASSERT_EQ(2, iv->size);
+  ASSERT_EQ(2, iv->blkNum);
 }
 
 /**
@@ -218,7 +218,7 @@ TEST_F(FGCTest, testRepairMiddleRemoveLast) {
   // Delete the first block:
   unsigned curId = 0;
   auto iv = getTagInvidx(ctx, sp, "f1", "hello");
-  while (iv->size < 3) {
+  while (iv->blkNum < 3) {
     char buf[1024];
     size_t n = sprintf(buf, "doc%u", curId++);
     ASSERT_TRUE(RS::addDocument(ctx, sp, buf, "f1", "hello"));
@@ -246,7 +246,7 @@ TEST_F(FGCTest, testRepairMiddleRemoveLast) {
   ASSERT_TRUE(RS::addDocument(ctx, sp, buf, "f1", "hello"));
 
   FGC_WaitClear(fgc);
-  ASSERT_EQ(2, iv->size);
+  ASSERT_EQ(2, iv->blkNum);
 }
 
 /**
@@ -258,17 +258,17 @@ TEST_F(FGCTest, testRemoveMiddleBlock) {
   unsigned curId = 0;
   InvertedIndex *iv = getTagInvidx(ctx, sp, "f1", "hello");
 
-  while (iv->size < 2) {
+  while (iv->blkNum < 2) {
     RS::addDocument(ctx, sp, numToDocid(++curId).c_str(), "f1", "hello");
   }
 
   unsigned firstMidId = curId;
-  while (iv->size < 3) {
+  while (iv->blkNum < 3) {
     RS::addDocument(ctx, sp, numToDocid(++curId).c_str(), "f1", "hello");
   }
   unsigned firstLastBlockId = curId;
   unsigned lastMidId = curId - 1;
-  ASSERT_EQ(3, iv->size);
+  ASSERT_EQ(3, iv->blkNum);
 
   FGC_WaitAtFork(fgc);
 
@@ -279,7 +279,7 @@ TEST_F(FGCTest, testRemoveMiddleBlock) {
   FGC_WaitAtApply(fgc);
   // Add a new document
   unsigned newLastBlockId = curId + 1;
-  while (iv->size < 4) {
+  while (iv->blkNum < 4) {
     ASSERT_TRUE(RS::addDocument(ctx, sp, numToDocid(++curId).c_str(), "f1", "hello"));
   }
   unsigned lastLastBlockId = curId - 1;
@@ -287,13 +287,13 @@ TEST_F(FGCTest, testRemoveMiddleBlock) {
   // Get the previous pointer, i.e. the one we expect to have the updated
   // info. We do -2 and not -1 because we have one new document in the
   // fourth block (as a sentinel)
-  const char *pp = iv->blocks[iv->size - 2].buf.data;
+  const char *pp = iv->blocks[iv->blkNum - 2].buf.data;
   FGC_WaitClear(fgc);
 
-  ASSERT_EQ(3, iv->size);
+  ASSERT_EQ(3, iv->blkNum);
 
   // The pointer to the last gc-block, received from the fork
-  const char *gcpp = iv->blocks[iv->size - 2].buf.data;
+  const char *gcpp = iv->blocks[iv->blkNum - 2].buf.data;
   ASSERT_EQ(pp, gcpp);
 
   // Now search for the ID- let's be sure it exists

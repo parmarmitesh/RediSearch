@@ -25,11 +25,11 @@ void *InvertedIndex_RdbLoad(RedisModuleIO *rdb, int encver) {
   }
   idx->lastId = RedisModule_LoadUnsigned(rdb);
   idx->numDocs = RedisModule_LoadUnsigned(rdb);
-  idx->size = RedisModule_LoadUnsigned(rdb);
-  idx->blocks = rm_calloc(idx->size, sizeof(IndexBlock));
+  idx->blkNum = RedisModule_LoadUnsigned(rdb);
+  idx->blocks = rm_calloc(idx->blkNum, sizeof(IndexBlock));
 
   size_t actualSize = 0;
-  for (uint32_t i = 0; i < idx->size; i++) {
+  for (uint32_t i = 0; i < idx->blkNum; i++) {
     IndexBlock *blk = &idx->blocks[actualSize];
     blk->firstId = RedisModule_LoadUnsigned(rdb);
     blk->lastId = RedisModule_LoadUnsigned(rdb);
@@ -51,11 +51,11 @@ void *InvertedIndex_RdbLoad(RedisModuleIO *rdb, int encver) {
       blk->buf.data = buf;
     }
   }
-  idx->size = actualSize;
-  if (idx->size == 0) {
+  idx->blkNum = actualSize;
+  if (idx->blkNum == 0) {
     InvertedIndex_AddBlock(idx, 0);
   } else {
-    idx->blocks = rm_realloc(idx->blocks, idx->size * sizeof(IndexBlock));
+    idx->blocks = rm_realloc(idx->blocks, idx->blkNum * sizeof(IndexBlock));
   }
   return idx;
 }
@@ -66,7 +66,7 @@ void InvertedIndex_RdbSave(RedisModuleIO *rdb, void *value) {
   RedisModule_SaveUnsigned(rdb, idx->lastId);
   RedisModule_SaveUnsigned(rdb, idx->numDocs);
   uint32_t readSize = 0;
-  for (uint32_t i = 0; i < idx->size; i++) {
+  for (uint32_t i = 0; i < idx->blkNum; i++) {
     IndexBlock *blk = &idx->blocks[i];
     if (blk->numDocs == 0) {
       continue;
@@ -75,7 +75,7 @@ void InvertedIndex_RdbSave(RedisModuleIO *rdb, void *value) {
   }
   RedisModule_SaveUnsigned(rdb, readSize);
 
-  for (uint32_t i = 0; i < idx->size; i++) {
+  for (uint32_t i = 0; i < idx->blkNum; i++) {
     IndexBlock *blk = &idx->blocks[i];
     if (blk->numDocs == 0) {
       continue;
@@ -96,7 +96,7 @@ void InvertedIndex_Digest(RedisModuleDigest *digest, void *value) {
 unsigned long InvertedIndex_MemUsage(const void *value) {
   const InvertedIndex *idx = value;
   unsigned long ret = sizeof(InvertedIndex);
-  for (size_t i = 0; i < idx->size; i++) {
+  for (size_t i = 0; i < idx->blkNum; i++) {
     ret += sizeof(IndexBlock);
     ret += IndexBlock_DataLen(&idx->blocks[i]);
   }

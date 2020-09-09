@@ -23,7 +23,7 @@ uint64_t TotalIIBlocks = 0;
 #define INDEX_BLOCK_INITIAL_CAP 6
 
 // The last block of the index
-#define INDEX_LAST_BLOCK(idx) (idx->blocks[idx->size - 1])
+#define INDEX_LAST_BLOCK(idx) (idx->blocks[idx->blkNum - 1])
 
 // pointer to the current block while reading the index
 #define IR_CURRENT_BLOCK(ir) (ir->idx->blocks[ir->currentBlock])
@@ -44,9 +44,9 @@ static t_docId calculateId(t_docId lastId, uint32_t delta, int isFirst);
 /* Add a new block to the index with a given document id as the initial id */
 IndexBlock *InvertedIndex_AddBlock(InvertedIndex *idx, t_docId firstId) {
   TotalIIBlocks++;
-  idx->size++;
-  idx->blocks = rm_realloc(idx->blocks, idx->size * sizeof(IndexBlock));
-  IndexBlock *last = idx->blocks + (idx->size - 1);
+  idx->blkNum++;
+  idx->blocks = rm_realloc(idx->blocks, idx->blkNum * sizeof(IndexBlock));
+  IndexBlock *last = idx->blocks + (idx->blkNum - 1);
   memset(last, 0, sizeof(*last));  // for msan
   last->firstId = last->lastId = firstId;
   Buffer_Init(&INDEX_LAST_BLOCK(idx).buf, INDEX_BLOCK_INITIAL_CAP);
@@ -56,7 +56,8 @@ IndexBlock *InvertedIndex_AddBlock(InvertedIndex *idx, t_docId firstId) {
 InvertedIndex *NewInvertedIndex(IndexFlags flags, int initBlock) {
   InvertedIndex *idx = rm_malloc(sizeof(InvertedIndex));
   idx->blocks = NULL;
-  idx->size = 0;
+  idx->blkNum = 0;
+  idx->sizeByte = 0;
   idx->lastId = 0;
   idx->gcMarker = 0;
   idx->flags = flags;
@@ -73,8 +74,8 @@ void indexBlock_Free(IndexBlock *blk) {
 
 void InvertedIndex_Free(void *ctx) {
   InvertedIndex *idx = ctx;
-  TotalIIBlocks -= idx->size;
-  for (uint32_t i = 0; i < idx->size; i++) {
+  TotalIIBlocks -= idx->blkNum;
+  for (uint32_t i = 0; i < idx->blkNum; i++) {
     indexBlock_Free(&idx->blocks[i]);
   }
   rm_free(idx->blocks);
@@ -900,7 +901,7 @@ int IR_Read(void *ctx, RSIndexResult **e) {
     // if needed - skip to the next block (skipping empty blocks that may appear here due to GC)
     while (BufferReader_AtEnd(&ir->br)) {
       // We're at the end of the last block...
-      if (ir->currentBlock + 1 == ir->idx->size) {
+      if (ir->currentBlock + 1 == ir->idx->blkNum) {
         goto eof;
       }
       IndexReader_AdvanceBlock(ir);
@@ -937,11 +938,11 @@ static int IndexReader_SkipToBlock(IndexReader *ir, t_docId docId) {
   InvertedIndex *idx = ir->idx;
 
   // the current block doesn't match and it's the last one - no point in searching
-  if (ir->currentBlock + 1 == idx->size) {
+  if (ir->currentBlock + 1 == idx->blkNum) {
     return 0;
   }
 
-  uint32_t top = idx->size - 1;
+  uint32_t top = idx->blkNum - 1;
   uint32_t bottom = ir->currentBlock + 1;
   uint32_t i = bottom;  //(bottom + top) / 2;
   while (bottom <= top) {
@@ -978,7 +979,7 @@ int IR_SkipTo(void *ctx, t_docId docId, RSIndexResult **hit) {
     goto eof;
   }
 
-  if (docId > ir->idx->lastId || ir->idx->size == 0) {
+  if (docId > ir->idx->lastId || ir->idx->blkNum == 0) {
     goto eof;
   }
 
@@ -1018,7 +1019,7 @@ int IR_SkipTo(void *ctx, t_docId docId, RSIndexResult **hit) {
     // // if needed - skip to the next block (skipping empty blocks that may appear here due to GC)
     while (BufferReader_AtEnd(&ir->br)) {
       // We're at the end of the last block...
-      if (ir->currentBlock + 1 == ir->idx->size) {
+      if (ir->currentBlock + 1 == ir->idx->blkNum) {
         goto eof;
       }
       IndexReader_AdvanceBlock(ir);
@@ -1029,7 +1030,7 @@ int IR_SkipTo(void *ctx, t_docId docId, RSIndexResult **hit) {
     // scanning only when we found such an id or we reached the end of the inverted index.
     while (!ir->decoders.seeker(&ir->br, &ir->decoderCtx, ir, docId, ir->record)) {
       if (BufferReader_AtEnd(&ir->br)) {
-        if (ir->currentBlock < ir->idx->size - 1) {
+        if (ir->currentBlock < ir->idx->blkNum - 1) {
           IndexReader_AdvanceBlock(ir);
         } else {
           return INDEXREAD_EOF;
@@ -1276,7 +1277,8 @@ int InvertedIndex_Repair(InvertedIndex *idx, DocTable *dt, uint32_t startBlock,
                          IndexRepairParams *params) {
   size_t limit = params->limit ? params->limit : SIZE_MAX;
   size_t blocksProcessed = 0;
-  for (; startBlock < idx->size && blocksProcessed < limit; ++startBlock, ++blocksProcessed) {
+  size_t oldBytesCollected = params->bytesCollected;
+  for (; startBlock < idx->blkNum && blocksProcessed < limit; ++startBlock, ++blocksProcessed) {
     IndexBlock *blk = idx->blocks + startBlock;
     if (blk->lastId - blk->firstId > UINT32_MAX) {
       // Skip over blocks which have a wide variation. In the future we might
@@ -1297,5 +1299,5 @@ int InvertedIndex_Repair(InvertedIndex *idx, DocTable *dt, uint32_t startBlock,
     }
   }
 
-  return startBlock < idx->size ? startBlock : 0;
+  return startBlock < idx->blkNum ? startBlock : 0;
 }

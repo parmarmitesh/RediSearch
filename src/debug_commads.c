@@ -99,11 +99,11 @@ DEBUG_COMMAND(InvertedIndexSummary) {
   REPLY_WITH_LONG_LONG("numDocs", invidx->numDocs, invIdxBulkLen);
   REPLY_WITH_LONG_LONG("lastId", invidx->lastId, invIdxBulkLen);
   REPLY_WITH_LONG_LONG("flags", invidx->flags, invIdxBulkLen);
-  REPLY_WITH_LONG_LONG("numberOfBlocks", invidx->size, invIdxBulkLen);
+  REPLY_WITH_LONG_LONG("numberOfBlocks", invidx->blkNum, invIdxBulkLen);
 
   RedisModule_ReplyWithStringBuffer(ctx, "blocks", strlen("blocks"));
 
-  for (uint32_t i = 0; i < invidx->size; ++i) {
+  for (uint32_t i = 0; i < invidx->blkNum; ++i) {
     size_t blockBulkLen = 0;
     IndexBlock *block = invidx->blocks + i;
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
@@ -506,7 +506,7 @@ DEBUG_COMMAND(InfoTagIndex) {
     RedisModule_ReplyWithLongLong(ctx, iv->numDocs);
 
     RedisModule_ReplyWithSimpleString(ctx, "num_blocks");
-    RedisModule_ReplyWithLongLong(ctx, iv->size);
+    RedisModule_ReplyWithLongLong(ctx, iv->blkNum);
 
     if (options.dumpIdEntries) {
       RedisModule_ReplyWithSimpleString(ctx, "entries");

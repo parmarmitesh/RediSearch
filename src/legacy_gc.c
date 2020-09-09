@@ -353,7 +353,9 @@ size_t gc_NumericIndex(RedisModuleCtx *ctx, GarbageCollectorCtx *gc, int *status
     /// update the statistics with the the number of records deleted
     numericGcCtx->rt->numEntries -= params.docsCollected;
     totalRemoved += params.docsCollected;
-    gc_updateStats(sctx, gc, params.docsCollected, params.bytesCollected);
+    if (NumericRangeNode_IsLeaf(nextNode)) {
+      gc_updateStats(sctx, gc, params.docsCollected, params.bytesCollected);
+    }
     // blockNum 0 means error or we've finished
     if (!blockNum) break;
 

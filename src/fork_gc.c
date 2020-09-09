@@ -198,15 +198,15 @@ static bool FGC_childRepairInvidx(ForkGC *gc, RedisSearchCtx *sctx, InvertedInde
                                   IndexRepairParams *params) {
   MSG_RepairedBlock *fixed = array_new(MSG_RepairedBlock, 10);
   MSG_DeletedBlock *deleted = array_new(MSG_DeletedBlock, 10);
-  IndexBlock *blocklist = array_new(IndexBlock, idx->size);
-  MSG_IndexInfo ixmsg = {.nblocksOrig = idx->size};
+  IndexBlock *blocklist = array_new(IndexBlock, idx->blkNum);
+  MSG_IndexInfo ixmsg = {.nblocksOrig = idx->blkNum};
   IndexRepairParams params_s = {0};
   bool rv = false;
   if (!params) {
     params = &params_s;
   }
 
-  for (size_t i = 0; i < idx->size; ++i) {
+  for (size_t i = 0; i < idx->blkNum; ++i) {
     IndexBlock *blk = idx->blocks + i;
     if (blk->lastId - blk->firstId > UINT32_MAX) {
       // Skip over blocks which have a wide variation. In the future we might
@@ -244,7 +244,7 @@ static bool FGC_childRepairInvidx(ForkGC *gc, RedisSearchCtx *sctx, InvertedInde
 
     ixmsg.nbytesCollected += params->bytesCollected;
     ixmsg.ndocsCollected += nrepaired;
-    if (i == idx->size - 1) {
+    if (i == idx->blkNum - 1) {
       ixmsg.lastblkBytesCollected = params->bytesCollected;
       ixmsg.lastblkDocsRemoved = nrepaired;
       ixmsg.lastblkNumDocs = blk->numDocs + nrepaired;
@@ -258,7 +258,7 @@ static bool FGC_childRepairInvidx(ForkGC *gc, RedisSearchCtx *sctx, InvertedInde
 
   headerCallback(gc, hdrarg);
   FGC_sendFixed(gc, &ixmsg, sizeof ixmsg);
-  if (array_len(blocklist) == idx->size) {
+  if (array_len(blocklist) == idx->blkNum) {
     // no empty block, there is no need to send the blocks array. Don't send
     // any new blocks
     FGC_sendBuffer(gc, NULL, 0);
@@ -430,7 +430,7 @@ static void FGC_childCollectNumeric(ForkGC *gc, RedisSearchCtx *sctx) {
       }
       numCbCtx nctx = {0};
       InvertedIndex *idx = currNode->range->entries;
-      nctx.lastblk = idx->blocks + idx->size - 1;
+      nctx.lastblk = idx->blocks + idx->blkNum - 1;
       IndexRepairParams params = {.RepairCallback = countDeleted, .arg = &nctx};
       header.curPtr = currNode;
       bool repaired = FGC_childRepairInvidx(gc, sctx, idx, sendNumericTagHeader, &header, &params);
@@ -654,7 +654,7 @@ static void FGC_applyInvertedIndex(ForkGC *gc, InvIdxBuffers *idxData, MSG_Index
   rm_free(idxData->delBlocks);
 
   // Ensure the old index is at least as big as the new index' size
-  RS_LOG_ASSERT(idx->size >= info->nblocksOrig, "Old index should be larger or equal to new index");
+  RS_LOG_ASSERT(idx->blkNum >= info->nblocksOrig, "Old index should be larger or equal to new index");
 
   if (idxData->newBlocklist) {
     /**
@@ -673,7 +673,7 @@ static void FGC_applyInvertedIndex(ForkGC *gc, InvIdxBuffers *idxData, MSG_Index
     }
 
     // Number of blocks added in the parent process since the last scan
-    size_t newAddedLen = idx->size - info->nblocksOrig;
+    size_t newAddedLen = idx->blkNum - info->nblocksOrig;
 
     // The final size is the reordered block size, plus the number of blocks
     // which we haven't scanned yet, because they were added in the parent
@@ -687,16 +687,16 @@ static void FGC_applyInvertedIndex(ForkGC *gc, InvIdxBuffers *idxData, MSG_Index
     rm_free(idx->blocks);
     idxData->newBlocklistSize += newAddedLen;
     idx->blocks = idxData->newBlocklist;
-    idx->size = idxData->newBlocklistSize;
+    idx->blkNum = idxData->newBlocklistSize;
   } else if (idxData->numDelBlocks) {
     // In this case, all blocks the child has seen need to be deleted. We don't
     // get a new block list, because they are all gone..
-    size_t newAddedLen = idx->size - info->nblocksOrig;
+    size_t newAddedLen = idx->blkNum - info->nblocksOrig;
     if (newAddedLen) {
       memmove(idx->blocks, idx->blocks + info->nblocksOrig, sizeof(*idx->blocks) * newAddedLen);
     }
-    idx->size = newAddedLen;
-    if (idx->size == 0) {
+    idx->blkNum = newAddedLen;
+    if (idx->blkNum == 0) {
       InvertedIndex_AddBlock(idx, 0);
     }
   }
@@ -844,7 +844,7 @@ error:
   return FGC_CHILD_ERROR;
 }
 
-static void resetCardinality(NumGcInfo *info, NumericRangeNode *currNone) {
+static void resetCardinality(NumGcInfo *info, NumericRangeNode *currNode) {
   khash_t(cardvals) *kh = kh_init(cardvals);
   int added;
   for (size_t ii = 0; ii < info->nrestBlockDel; ++ii) {
@@ -864,7 +864,7 @@ static void resetCardinality(NumGcInfo *info, NumericRangeNode *currNone) {
     }
   }
 
-  NumericRange *r = currNone->range;
+  NumericRange *r = currNode->range;
   size_t n = array_len(r->values);
   double minVal = DBL_MAX, maxVal = -DBL_MIN, uniqueSum = 0;
 
@@ -889,7 +889,7 @@ static void resetCardinality(NumGcInfo *info, NumericRangeNode *currNone) {
   // we can only update the min and the max value if the node is a leaf.
   // otherwise the min and the max also represent its children values and
   // we can not change it.
-  if (NumericRangeNode_IsLeaf(currNone)) {
+  if (NumericRangeNode_IsLeaf(currNode)) {
     r->minVal = minVal;
     r->maxVal = maxVal;
   }
@@ -902,7 +902,9 @@ static void applyNumIdx(ForkGC *gc, RedisSearchCtx *sctx, NumGcInfo *ninfo) {
   InvIdxBuffers *idxbufs = &ninfo->idxbufs;
   MSG_IndexInfo *info = &ninfo->info;
   FGC_applyInvertedIndex(gc, idxbufs, info, currNode->range->entries);
-  FGC_updateStats(sctx, gc, info->ndocsCollected, info->nbytesCollected);
+  if (NumericRangeNode_IsLeaf(currNode)) {
+    FGC_updateStats(sctx, gc, info->ndocsCollected, info->nbytesCollected);
+  }
   resetCardinality(ninfo, currNode);
 }
 

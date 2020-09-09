@@ -159,7 +159,7 @@ TEST_P(IndexFlagsTest, testRWFlags) {
   }
 
   ASSERT_EQ(200, idx->numDocs);
-  ASSERT_EQ(2, idx->size);
+  ASSERT_EQ(2, idx->blkNum);
   ASSERT_EQ(199, idx->lastId);
 
   // IW_MakeSkipIndex(w, NewMemoryBuffer(8, BUFFER_WRITE));
@@ -1112,18 +1112,18 @@ TEST_F(IndexTest, testDeltaSplits) {
 
   IndexEncoder enc = InvertedIndex_GetEncoder(idx->flags);
   InvertedIndex_WriteForwardIndexEntry(idx, enc, &ent);
-  ASSERT_EQ(idx->size, 1);
+  ASSERT_EQ(idx->blkNum, 1);
 
   ent.docId = 200;
   InvertedIndex_WriteForwardIndexEntry(idx, enc, &ent);
-  ASSERT_EQ(idx->size, 1);
+  ASSERT_EQ(idx->blkNum, 1);
 
   ent.docId = 1LLU << 48;
   InvertedIndex_WriteForwardIndexEntry(idx, enc, &ent);
-  ASSERT_EQ(idx->size, 2);
+  ASSERT_EQ(idx->blkNum, 2);
   ent.docId++;
   InvertedIndex_WriteForwardIndexEntry(idx, enc, &ent);
-  ASSERT_EQ(idx->size, 2);
+  ASSERT_EQ(idx->blkNum, 2);
 
   IndexReader *ir = NewTermIndexReader(idx, NULL, RS_FIELDMASK_ALL, NULL, 1);
   RSIndexResult *h = NULL;

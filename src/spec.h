@@ -104,17 +104,18 @@ extern struct IndexesScanner *global_spec_scanner;
 extern dict *legacySpecRules;
 
 typedef struct {
-  size_t numDocuments;
-  size_t numTerms;
-  size_t numRecords;
-  size_t invertedSize;
-  size_t invertedCap;
-  size_t skipIndexesSize;
-  size_t scoreIndexesSize;
-  size_t offsetVecsSize;
-  size_t offsetVecRecords;
-  size_t termsSize;
-  size_t indexingFailures;
+  // int64_t since for debug we want to see negative values
+  int64_t numDocuments;
+  int64_t numTerms;
+  int64_t numRecords;
+  int64_t invertedSize;
+  int64_t invertedCap;
+  int64_t skipIndexesSize;
+  int64_t scoreIndexesSize;
+  int64_t offsetVecsSize;
+  int64_t offsetVecRecords;
+  int64_t termsSize;
+  int64_t indexingFailures;
 } IndexStats;
 
 typedef enum {
