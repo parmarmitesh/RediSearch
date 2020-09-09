@@ -26,11 +26,15 @@ def check_empty(env, idx):
     d = ft_info_to_dict(env, idx)
     env.assertEqual(float(d['inverted_sz_mb']), 0)
     env.assertEqual(float(d['num_records']), 0)
-    
+    d = ft_debug_to_dict(env, idx, 'n')
+    env.assertEqual(float(d['numEntries']), 0)
+
 def check_not_empty(env, idx):
     d = ft_info_to_dict(env, idx)
     env.assertGreater(float(d['inverted_sz_mb']), 0)
     env.assertGreater(float(d['num_records']), 0)
+    d = ft_debug_to_dict(env, idx, 'n')
+    env.assertGreater(float(d['numEntries']), 0)
 
 ##########################################################################
 

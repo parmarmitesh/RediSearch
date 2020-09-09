@@ -1277,7 +1277,6 @@ int InvertedIndex_Repair(InvertedIndex *idx, DocTable *dt, uint32_t startBlock,
                          IndexRepairParams *params) {
   size_t limit = params->limit ? params->limit : SIZE_MAX;
   size_t blocksProcessed = 0;
-  size_t oldBytesCollected = params->bytesCollected;
   for (; startBlock < idx->blkNum && blocksProcessed < limit; ++startBlock, ++blocksProcessed) {
     IndexBlock *blk = idx->blocks + startBlock;
     if (blk->lastId - blk->firstId > UINT32_MAX) {

@@ -897,13 +897,14 @@ static void resetCardinality(NumGcInfo *info, NumericRangeNode *currNode) {
   r->card = array_len(r->values);
 }
 
-static void applyNumIdx(ForkGC *gc, RedisSearchCtx *sctx, NumGcInfo *ninfo) {
+static void applyNumIdx(ForkGC *gc, RedisSearchCtx *sctx, NumGcInfo *ninfo, NumericRangeTree *rt) {
   NumericRangeNode *currNode = ninfo->node;
   InvIdxBuffers *idxbufs = &ninfo->idxbufs;
   MSG_IndexInfo *info = &ninfo->info;
   FGC_applyInvertedIndex(gc, idxbufs, info, currNode->range->entries);
   if (NumericRangeNode_IsLeaf(currNode)) {
     FGC_updateStats(sctx, gc, info->ndocsCollected, info->nbytesCollected);
+    rt->numEntries -= info->ndocsCollected;
   }
   resetCardinality(ninfo, currNode);
 }
@@ -955,7 +956,7 @@ static FGCError FGC_parentHandleNumeric(ForkGC *gc, RedisModuleCtx *rctx) {
       goto loop_cleanup;
     }
 
-    applyNumIdx(gc, sctx, &ninfo);
+    applyNumIdx(gc, sctx, &ninfo, rt);
 
   loop_cleanup:
     if (sctx) {

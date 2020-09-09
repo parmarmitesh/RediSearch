@@ -130,9 +130,8 @@ NRN_AddRv NumericRangeNode_Add(NumericRangeNode *n, t_docId docId, double value)
     // if this node has already split but retains a range, just add to the range without checking
     // anything
     if (n->range) {
-      // Not leaf so should not add??
-      /* sz += */ NumericRange_Add(n->range, docId, value, 0);
-      // should continue after??
+      // count only addition to leaf
+      NumericRange_Add(n->range, docId, value, 0);
     }
 
     // recursively add to its left or right child.
@@ -288,8 +287,8 @@ size_t NumericRangeTree_Add(NumericRangeTree *t, t_docId docId, double value) {
   // will abort the next time they get execution context
   if (rv.changed) {
     t->revisionId++;
+    t->numRanges++;
   }
-  t->numRanges += rv.changed;
   t->numEntries++;
 
   return rv.sz;

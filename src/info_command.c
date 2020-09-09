@@ -3,6 +3,8 @@
 #include "inverted_index.h"
 #include "cursor.h"
 
+#define MB (1024.0 * 1024)
+
 #define REPLY_KVNUM(n, k, v)                       \
   do {                                             \
     RedisModule_ReplyWithSimpleString(ctx, (k));   \
@@ -164,21 +166,21 @@ int IndexInfoCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
   REPLY_KVNUM(n, "max_doc_id", sp->docs.maxDocId);
   REPLY_KVNUM(n, "num_terms", sp->stats.numTerms);
   REPLY_KVNUM(n, "num_records", sp->stats.numRecords);
-  REPLY_KVNUM(n, "inverted_sz_mb", sp->stats.invertedSize / (float)0x100000);
+  REPLY_KVNUM(n, "inverted_sz_mb", sp->stats.invertedSize / MB);
   REPLY_KVNUM(n, "total_inverted_index_blocks", TotalIIBlocks);
-  // REPLY_KVNUM(n, "inverted_cap_mb", sp->stats.invertedCap / (float)0x100000);
+  // REPLY_KVNUM(n, "inverted_cap_mb", sp->stats.invertedCap / MB);
 
   // REPLY_KVNUM(n, "inverted_cap_ovh", 0);
   //(float)(sp->stats.invertedCap - sp->stats.invertedSize) / (float)sp->stats.invertedCap);
 
-  REPLY_KVNUM(n, "offset_vectors_sz_mb", sp->stats.offsetVecsSize / (float)0x100000);
-  // REPLY_KVNUM(n, "skip_index_size_mb", sp->stats.skipIndexesSize / (float)0x100000);
-  //  REPLY_KVNUM(n, "score_index_size_mb", sp->stats.scoreIndexesSize / (float)0x100000);
+  REPLY_KVNUM(n, "offset_vectors_sz_mb", sp->stats.offsetVecsSize / MB);
+  // REPLY_KVNUM(n, "skip_index_size_mb", sp->stats.skipIndexesSize / MB);
+  //  REPLY_KVNUM(n, "score_index_size_mb", sp->stats.scoreIndexesSize / MB);
 
-  REPLY_KVNUM(n, "doc_table_size_mb", sp->docs.memsize / (float)0x100000);
-  REPLY_KVNUM(n, "sortable_values_size_mb", sp->docs.sortablesSize / (float)0x100000);
+  REPLY_KVNUM(n, "doc_table_size_mb", sp->docs.memsize / MB);
+  REPLY_KVNUM(n, "sortable_values_size_mb", sp->docs.sortablesSize / MB);
 
-  REPLY_KVNUM(n, "key_table_size_mb", TrieMap_MemUsage(sp->docs.dim.tm) / (float)0x100000);
+  REPLY_KVNUM(n, "key_table_size_mb", TrieMap_MemUsage(sp->docs.dim.tm) / MB);
   REPLY_KVNUM(n, "records_per_doc_avg",
               (float)sp->stats.numRecords / (float)sp->stats.numDocuments);
   REPLY_KVNUM(n, "bytes_per_record_avg",
